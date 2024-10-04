@@ -48,7 +48,6 @@ const scheduleDeletion = (filePath, jsonFilePath, expirationTime) => {
   }
 };
 
-// POST API to upload a zip file and get the access key
 app.post('/upload', upload.single('zipfile'), async (req, res) => {
   const sessionNumber = getSessionNumber() - 1;
   const filePath = path.join(AUTH_DIR, `session${sessionNumber}.zip`);
