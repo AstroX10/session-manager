@@ -53,7 +53,9 @@ app.post('/upload', upload.single('zipfile'), async (req, res) => {
   const filePath = path.join(AUTH_DIR, `session${sessionNumber}.zip`);
   const accessKey = uuidv4(); // Generate a unique access key
   const uploadTime = Date.now();
-  const expirationTime = uploadTime + 48 * 60 * 60 * 1000; // 48 hours in milliseconds
+
+  // Set expiration time to 1 week (7 days)
+  const expirationTime = uploadTime + 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
 
   // Create a JSON file with metadata
   const sessionInfo = {
@@ -68,14 +70,14 @@ app.post('/upload', upload.single('zipfile'), async (req, res) => {
   const jsonFilePath = path.join(AUTH_DIR, `session${sessionNumber}.json`);
   await fs.writeJson(jsonFilePath, sessionInfo);
 
-  // Schedule deletion of the file after 48 hours
+  // Schedule deletion of the file after 1 week
   scheduleDeletion(filePath, jsonFilePath, expirationTime);
 
   // Return the access key to the user
   res.status(201).json({
     message: `File uploaded successfully as session${sessionNumber}`,
     accessKey: accessKey,
-    expiresIn: '48 hours',
+    expiresIn: '1 week',
   });
 });
 
