@@ -1,122 +1,86 @@
 import express from 'express';
 import multer from 'multer';
-import fs from 'fs-extra';
 import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
 import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+import os from 'os';
+import { generateAccessKey } from './client/keyGenerator.js';
+import sequelize, { User, File } from './client/db.js';
+const app = express();
+const PORT = 3000;
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const app = express();
-const PORT = 5000;
+const __dirname = path.dirname(__filename);
 
-// Directory to store files
-const AUTH_DIR = path.join(__dirname, 'auth');
-
-// Ensure `auth` folder exists
-fs.ensureDirSync(AUTH_DIR);
-
-// Multer configuration for file uploads
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, AUTH_DIR),
-  filename: (req, file, cb) => {
-    let sessionNumber = getSessionNumber();
-    cb(null, `session${sessionNumber}.zip`);
-  },
+ destination: (req, file, cb) => {
+  cb(null, path.join(__dirname, 'storage'));
+ },
+ filename: (req, file, cb) => {
+  cb(null, Date.now() + path.extname(file.originalname));
+ },
 });
 
 const upload = multer({ storage });
 
-// Utility function to get the current session number
-const getSessionNumber = () => {
-  const files = fs.readdirSync(AUTH_DIR);
-  const sessions = files.filter((file) => file.startsWith('session') && file.endsWith('.zip'));
-  return sessions.length + 1;
-};
-
-// Function to delete file and corresponding JSON after expiration
-const scheduleDeletion = (filePath, jsonFilePath, expirationTime) => {
-  const delay = expirationTime - Date.now();
-  if (delay > 0) {
-    setTimeout(() => {
-      fs.remove(filePath)
-        .then(() => fs.remove(jsonFilePath))
-        .then(() => console.log(`Deleted: ${filePath} and ${jsonFilePath}`))
-        .catch((err) => console.error(`Failed to delete: ${err}`));
-    }, delay);
-  }
-};
-
-app.post('/upload', upload.single('zipfile'), async (req, res) => {
-  const sessionNumber = getSessionNumber() - 1;
-  const filePath = path.join(AUTH_DIR, `session${sessionNumber}.zip`);
-  const accessKey = uuidv4(); // Generate a unique access key
-  const uploadTime = Date.now();
-
-  // Set expiration time to 1 week (7 days)
-  const expirationTime = uploadTime + 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
-
-  // Create a JSON file with metadata
-  const sessionInfo = {
-    session: sessionNumber,
-    filename: `session${sessionNumber}.zip`,
-    path: filePath,
-    accessKey: accessKey,
-    uploadTime: new Date(uploadTime).toISOString(),
-    expirationTime: new Date(expirationTime).toISOString(),
-  };
-
-  const jsonFilePath = path.join(AUTH_DIR, `session${sessionNumber}.json`);
-  await fs.writeJson(jsonFilePath, sessionInfo);
-
-  // Schedule deletion of the file after 1 week
-  scheduleDeletion(filePath, jsonFilePath, expirationTime);
-
-  // Return the access key to the user
-  res.status(201).json({
-    message: `File uploaded successfully as session${sessionNumber}`,
-    accessKey: accessKey,
-    expiresIn: '1 week',
-  });
+/**
+ * @route GET /
+ * @desc Returns server details such as uptime and platform information.
+ */
+app.get('/', (req, res) => {
+ const details = {
+  uptime: os.uptime(),
+  platform: os.platform(),
+  cpuCount: os.cpus().length,
+ };
+ res.json({
+  message: 'Server is running',
+  ...details,
+ });
 });
 
-// GET API to download the .zip file using the access key
-app.get('/download/:accessKey', (req, res) => {
-  const { accessKey } = req.params;
+/**
+ * @route POST /upload
+ * @desc Handles file uploads and saves the file metadata in the database.
+ */
+app.post('/upload', upload.single('file'), async (req, res) => {
+ try {
+  const accessKey = generateAccessKey(); // Generate access key
+  const user = await User.create({ accessKey }); // Create user with access key
 
-  // Find the JSON file that matches the given access key
-  const jsonFiles = fs.readdirSync(AUTH_DIR).filter((file) => file.endsWith('.json'));
-  let sessionInfo;
-
-  for (let jsonFile of jsonFiles) {
-    const jsonFilePath = path.join(AUTH_DIR, jsonFile);
-    const fileData = fs.readJsonSync(jsonFilePath);
-    if (fileData.accessKey === accessKey) {
-      sessionInfo = fileData;
-      break;
-    }
-  }
-
-  if (!sessionInfo) {
-    return res.status(404).send('Invalid access key or file not found.');
-  }
-
-  // Check if the file has expired
-  const now = Date.now();
-  if (now > new Date(sessionInfo.expirationTime).getTime()) {
-    return res.status(410).send('File has expired and is no longer available.');
-  }
-
-  // Send the .zip file for download
-  res.download(sessionInfo.path, (err) => {
-    if (err) {
-      res.status(500).send('Error in downloading file.');
-    }
+  const fileData = await File.create({
+   filename: req.file.filename,
+   path: req.file.path,
+   userId: user.userId,
   });
+
+  res.json({ info: 'Upload Success', accessKey });
+ } catch (error) {
+  res.status(500).json({ error: 'File upload failed', details: error.message });
+ }
 });
 
-// Start the server
+/**
+ * @route GET /download/:accessKey
+ * @desc Allows users to download a file using their access key.
+ */
+app.get('/download/:accessKey', async (req, res) => {
+ try {
+  const user = await User.findOne({ where: { accessKey: req.params.accessKey } });
+  if (!user) {
+   return res.status(404).json({ error: 'Access key not found' });
+  }
+
+  const file = await File.findOne({ where: { userId: user.userId } });
+  if (!file) {
+   return res.status(404).json({ error: 'File not found' });
+  }
+
+  res.download(file.path, file.filename);
+ } catch (error) {
+  res.status(500).json({ error: 'File download failed', details: error.message });
+ }
+});
+
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+ console.log(`Server running on http://localhost:${PORT}`);
 });

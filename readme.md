@@ -42,70 +42,76 @@ Session Manager is a Node.js application that allows users to upload `.zip` file
 
    Make sure the server is running on the specified port (default: 3000).
 
-## API Endpoints
-
-### 1. Upload `.zip` File
-
-**POST** `/upload`
-
-- **Request Body**: Form-data with a field named `zipfile` containing the `.zip` file.
-- **Response**: Returns a JSON object containing a success message, access key, and expiration time.
-
-**Example Request**:
-```bash
-curl -X POST -F "zipfile=@path/to/yourfile.zip" http://localhost:3000/upload
-```
-
-**Response**:
-```json
-{
-  "message": "File uploaded successfully as session1",
-  "accessKey": "33f755b6-2c61-414f-bb8f-a895d60a940e",
-  "expiresIn": "48 hours"
-}
-```
-
-### 2. Download `.zip` File
-
-**GET** `/download/:accessKey`
-
-- **Parameters**: `accessKey` - The unique access key for the uploaded file.
-- **Response**: Returns the requested `.zip` file.
-
-**Example Request**:
-```bash
-curl -O http://localhost:3000/download/33f755b6-2c61-414f-bb8f-a895d60a940e
-```
-
-### 3. Get Session Data
-
-**GET** `/session/:accessKey`
-
-- **Parameters**: `accessKey` - The unique access key for the uploaded file.
-- **Response**: Returns session details including access key, file name, and timestamps.
-
-**Example Request**:
-```bash
-curl http://localhost:3000/session/33f755b6-2c61-414f-bb8f-a895d60a940e
-```
-
 ## Usage
 
-### Creating and Uploading a `.zip` File
-
-1. Place your JSON files in the `auth` folder.
-2. Run the test script to create a `.zip` file, upload it to the server, and download it using the access key.
-
-**Example Test Script** (`test/test.js`):
+#### Upload
 
 ```javascript
-// Import necessary modules and set up the test script here...
+import axios from 'axios';
+import fs from 'fs';
+import path from 'path';
+import FormData from 'form-data'; // Import FormData from form-data package
+import { fileURLToPath } from 'url';
+
+// Get the current directory name
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const BASE_URL = 'http://localhost:3000';
+
+/**
+ * Uploads a ZIP file to the server.
+ * @param {string} filePath - The path of the ZIP file to be uploaded.
+ * @returns {Promise<string|null>} - Returns the access key for downloading, or null if an error occurs.
+ */
+export const uploadFile = async (filePath) => {
+ const formData = new FormData();
+ formData.append('file', fs.createReadStream(filePath));
+
+ try {
+  const response = await axios.post(`${BASE_URL}/upload`, formData, {
+   headers: {
+    ...formData.getHeaders(), // Get headers from form-data
+   },
+  });
+  console.log('Upload Response:', response.data);
+  return response.data.accessKey; // Return access key for download
+ } catch (error) {
+  console.error('Error uploading file:', error.response?.data || error.message);
+  return null;
+ }
+};
 ```
 
-### Downloading and Extracting the `.zip` File
+#### Download
 
-- After downloading the `.zip` file, the script automatically extracts it into the `session` folder, placing all `.json` files within that folder.
+```javascript
+import axios from 'axios';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-## Cleaning Up
+// Get the current directory name
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-The application is designed to delete uploaded files after 48 hours. Ensure to manage the directory structure and files as per your needs.
+const BASE_URL = 'http://localhost:3000';
+
+/**
+ * Downloads a file from the server using an access key.
+ * @param {string} accessKey - The access key for downloading the file.
+ * @returns {Promise<void>} - No return value. Logs success or failure to the console.
+ */
+export const downloadFile = async (accessKey) => {
+ try {
+  const response = await axios.get(`${BASE_URL}/download/${accessKey}`, {
+   responseType: 'arraybuffer', // To handle binary data
+  });
+  const fileName = `downloaded_${accessKey}.zip`;
+  fs.writeFileSync(path.join(__dirname, fileName), response.data);
+  console.log(`File downloaded successfully: ${fileName}`);
+ } catch (error) {
+  console.error('Error downloading file:', error.response?.data || error.message);
+ }
+};
+```

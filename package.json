@@ -1,41 +1,19 @@
 {
-  "name": "session-manager",
+  "name": "your-project-name",
   "version": "1.0.0",
-  "description": "A simple Session Manager to keep and secure session id as zip with key access as session id",
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/AstroX10/session-manager.git"
-  },
-  "keywords": [
-    "session",
-    "baileys",
-    "bot",
-    "whatsapp-bot",
-    "web",
-    "api",
-    "express",
-    "node",
-    "js"
-  ],
-  "author": "AstroX10",
-  "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/AstroX10/session-manager/issues"
-  },
-  "homepage": "https://github.com/AstroX10/session-manager#readme",
   "dependencies": {
-    "archiver": "^7.0.1",
     "axios": "^1.7.7",
-    "express": "^4.21.0",
-    "fs-extra": "^11.2.0",
+    "express": "^4.21.1",
+    "form-data": "^4.0.1",
+    "fs": "^0.0.1-security",
     "multer": "^1.4.5-lts.1",
-    "unzipper": "^0.12.3",
-    "uuid": "^10.0.0"
+    "path": "^0.12.7",
+    "sequelize": "^6.37.4",
+    "sqlite3": "^5.1.7"
   }
 }
